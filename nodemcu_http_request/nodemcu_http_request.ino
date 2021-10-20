@@ -2,67 +2,91 @@
 #include <ESP8266HTTPClient.h>
 #include <WiFiClient.h>
 
-const char* ssid = "Dialog 4G 311";
-const char* password = "5c8a8aF1";
+#define buzzPin D1
 
-const char* serverName = "http://192.168.8.151:8080/medInfo";
+const char* ssid = "OPPO A5s";
+const char* password = "qweqweqwe";
 
-String rs;
+String serverName = "http://192.168.43.236:8080/medInfo";
+
+unsigned long lastTime = 0;
+unsigned long timerDelay = 18000; // 18 sec
 
 void setup() {
-  Serial.begin(115200);
-
+  Serial.begin(9600);
+  
   WiFi.begin(ssid, password);
-  Serial.println("Connecting");
+  //Serial.println("Connecting");
   while(WiFi.status() != WL_CONNECTED) {
     delay(500);
-    Serial.print(".");
+    //Serial.print(".");
   }
-  Serial.println("");
-  Serial.print("Connected to WiFi network with IP Address: ");
-  Serial.println(WiFi.localIP());
+  //Serial.println("");
+  //Serial.print("Connected to WiFi network with IP Address: ");
+  //Serial.println(WiFi.localIP());
+
+  pinMode(buzzPin,OUTPUT); // Set buzzer-pin as output
+  digitalWrite(buzzPin, HIGH);
 }
 
 void loop() {
+  
+  String rs = "{}";
+  String receivedData = "";
+  
+  if ((millis() - lastTime) > timerDelay) {
 
-    //Check WiFi connection status
-    if(WiFi.status()== WL_CONNECTED){ 
-              
-      //rs = httpPOSTRequest(serverName);
-      //Serial.println(rs);
+    String haveReminder = checkReminders();
 
-      rs = httpGETRequest("893C0E21");
-      Serial.println(rs);
-      
+    //Serial.println(haveReminder);
+    if(haveReminder=="true"){
+          Buzzer();       
     }
-    else {
-      Serial.println("WiFi Disconnected");
-    }
+  
+    lastTime = millis();
+  }
+  
+  if (Serial.available()) {
+    receivedData = Serial.readStringUntil('\n');
+    receivedData.trim();
+  }
 
-    delay(30000);
+  if(receivedData != "" && receivedData !="893C0E21" && receivedData !="B64E130A"){
+    rs = httpPOSTRequest(serverName,receivedData);
+    Serial.println(rs);
+    delay(18000);
+  }
+
+  if(receivedData != "" && (receivedData =="893C0E21" || receivedData =="B64E130A")){
+    rs = httpGETRequest(serverName, receivedData);
+    rs.trim();
+    Serial.println(rs);
+    delay(18000);
+  }
 
 }
 
-String httpGETRequest(String rfid) {
+String httpGETRequest(String serverName, String receivedData) {   
   WiFiClient client;
   HTTPClient http;
-    
-  // Your IP address with path or Domain name with URL path
-  http.begin(client, "http://192.168.8.151:8080/medInfo/"+rfid);
+  String serverPath = serverName + "/" +receivedData;
   
-  // Send HTTP POST request
+  // Your IP address with path or Domain name with URL path
+  http.begin(client, serverPath);
+  
+  // Send HTTP GET request
   int httpResponseCode = http.GET();
   
   String payload = "{}"; 
   
   if (httpResponseCode>0) {
-    Serial.print("HTTP Response code: ");
-    Serial.println(httpResponseCode);
+    //Serial.print("HTTP Response code: ");
+    //Serial.println(httpResponseCode);
     payload = http.getString();
   }
   else {
-    Serial.print("Error code: ");
-    Serial.println(httpResponseCode);
+    //Serial.print("Error code: ");
+    //Serial.println(httpResponseCode);
   }
   // Free resources
   http.end();
@@ -70,7 +94,7 @@ String httpGETRequest(String rfid) {
   return payload;
 }
 
-String httpPOSTRequest(const char* serverName) {
+String httpPOSTRequest(String serverName, String receivedData) {
   WiFiClient client;
   HTTPClient http;
     
@@ -78,21 +102,58 @@ String httpPOSTRequest(const char* serverName) {
   http.begin(client, serverName);
   
   // Send HTTP POST request
-  int httpResponseCode = http.POST("/101/Vitamin/Capsule/After meal/50/No/8:30 a.m./1/3:00 p.m./1/9:00 p.m/2");
+  int httpResponseCode = http.POST(receivedData);
   
   String payload = "{}"; 
   
   if (httpResponseCode>0) {
-    Serial.print("HTTP Response code: ");
-    Serial.println(httpResponseCode);
+    //Serial.print("HTTP Response code: ");
+    //Serial.println(httpResponseCode);
     payload = http.getString();
   }
   else {
-    Serial.print("Error code: ");
-    Serial.println(httpResponseCode);
+    //Serial.print("Error code: ");
+    //Serial.println(httpResponseCode);
   }
   // Free resources
   http.end();
 
   return payload;
+}
+
+String checkReminders() {   
+  WiFiClient client;
+  HTTPClient http;
+  String serverPath = "http://192.168.43.236:8080/medInfo/alarm";
+  
+  // Your IP address with path or Domain name with URL path
+  http.begin(client, serverPath);
+  
+  // Send HTTP GET request
+  int httpResponseCode = http.GET();
+  
+  String payload = "false"; 
+  
+  if (httpResponseCode>0) {
+    //Serial.print("HTTP Response code: ");
+    //Serial.println(httpResponseCode);
+    payload = http.getString();
+  }
+  else {
+    //Serial.print("Error code: ");
+    //Serial.println(httpResponseCode);
+  }
+  // Free resources
+  http.end();
+
+  return payload;
+}
+
+void Buzzer()
+{
+
+  digitalWrite(buzzPin, LOW);   
+  delay(1000);                       
+  digitalWrite(buzzPin, HIGH);    
+  delay(1000); 
 }
